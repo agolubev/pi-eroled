@@ -19,17 +19,11 @@
   */
 package com.lightbend.akka_oled
 
-import java.lang.management.ManagementFactory
-import java.text.DecimalFormat
-
 import akka.actor.{Actor, ActorLogging, Props}
 import akka.cluster.Cluster
-import akka.cluster.ClusterEvent.{InitialStateAsEvents, LeaderChanged, MemberEvent, MemberExited, MemberJoined, MemberLeft, MemberRemoved, MemberUp, MemberWeaklyUp, ReachabilityEvent, ReachableMember, UnreachableMember}
-import com.lightbend.akka_oled.MetricsActor.{ACTOR_STATE, NEXT_SCREEN, PREVIOUS_SCREEN, SWITCH_FROM_TITLE_TO_SCREEN, Screens, UPDATE_DELAY, UPDATE_STATE, UPDATE_STATISTICS}
-import com.sun.management.OperatingSystemMXBean
+import akka.cluster.ClusterEvent.{InitialStateAsEvents, LeaderChanged, MemberEvent, ReachabilityEvent}
+import com.lightbend.akka_oled.MetricsActor._
 import eroled.SmartOLED
-import org.apache.commons.io.FileUtils
-import akka.actor.Props
 
 import scala.concurrent.duration._
 
@@ -43,6 +37,8 @@ object MetricsActor {
    case class SWITCH_FROM_TITLE_TO_SCREEN(screen:Screens.Value)
    case object UPDATE_STATISTICS
    case class ACTOR_STATE(path:String, State:String)
+   case class PERSISTENT_ACTOR_STATE(path:String, State:String)
+
    case object UPDATE_STATE
    val ACTOR_NAME = "akka-status-tracker"
 
@@ -72,7 +68,7 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
    import context.dispatcher
 
    var currentScreen: Screens.Value = Screens.JAVA_METRICS
-   var state = Map.empty[Screens.Value , List[(String, String)]]
+   var state = Map.empty[Screens.Value , Any]
    var showingTitle = true
    override def preStart(): Unit = {
       //oled.init()
@@ -118,15 +114,26 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
          }
       case UPDATE_STATISTICS  if currentScreen == Screens.JAVA_METRICS =>
                oled.drawKeyValues(getJavaMetrics)
-               import context.dispatcher
                context.system.scheduler.scheduleOnce(UPDATE_DELAY, self, UPDATE_STATISTICS)
+
       case UPDATE_STATE  if currentScreen == Screens.ACTOR_STATE =>
          renderActorState()
          context.system.scheduler.scheduleOnce(UPDATE_DELAY, self, UPDATE_STATE)
+
+      case UPDATE_STATE  if currentScreen == Screens.CLUSTER_SHARDING =>
+         renderPersistentActorState
+         context.system.scheduler.scheduleOnce(UPDATE_DELAY, self, UPDATE_STATE)
+
       case ACTOR_STATE(path,actorState) =>
          state += (Screens.ACTOR_STATE -> List[(String,String)](("Actor:", path),("State:", actorState)))
-/*
-   case Heartbeat if hearbeatLEDOn =>
+
+      case PERSISTENT_ACTOR_STATE(name, actorState) =>
+         var m = state.get(Screens.CLUSTER_SHARDING).getOrElse(Map.empty[String, String]).asInstanceOf[Map[String,String]]
+         m += ("Persistent Actor:"+name) -> ("State:"+actorState)
+         state += (Screens.CLUSTER_SHARDING -> m)
+      //-> List[(String,String)](("Persistent Actor:", name),("State:", actorState)))
+
+   /*case Heartbeat if hearbeatLEDOn =>
       setPixelColorAndShow(strip, logicalToPhysicalLEDMapping(HeartbeatLedNumber), Black)
       context.become(running(hearbeatLEDOn = false))
 
@@ -188,7 +195,7 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
    }
 
    private def renderScreen() {
-      println("RenderState "+currentScreen)
+      println("RenderState " + currentScreen)
       currentScreen match {
          case Screens.JAVA_METRICS =>
             import context.dispatcher
@@ -202,7 +209,12 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
             }
          case Screens.CLUSTER_STATE => if (state.get(currentScreen).isEmpty) renderEmptyScreen
          case Screens.NODE_STATE => if (state.get(currentScreen).isEmpty) renderEmptyScreen
-         case Screens.CLUSTER_SHARDING => if (state.get(currentScreen).isEmpty) renderEmptyScreen
+         case Screens.CLUSTER_SHARDING =>
+            if (state.get(currentScreen).isEmpty) renderEmptyScreen
+            else {
+               renderPersistentActorState()
+               context.system.scheduler.scheduleOnce(UPDATE_DELAY, self, UPDATE_STATE)
+            }
       }
    }
 
@@ -212,8 +224,13 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
    }
 
    private def renderActorState(): Unit = {
-      state.get(currentScreen).foreach(s =>
-         oled.drawMultilineString(s.map(a => a._1 + a._2).mkString("\n"))
+      state.get(Screens.ACTOR_STATE).foreach(s =>
+         oled.drawMultilineString(s.asInstanceOf[List[(String,String)]].map(a => a._1 + a._2).mkString("\n"))
+      )
+   }
+   private def renderPersistentActorState(): Unit = {
+      state.get(Screens.CLUSTER_SHARDING).foreach(s =>
+         oled.drawMultilineString(s.asInstanceOf[Map[String,String]].map(a => a._1 +"\n"+ a._2).mkString("\n"))
       )
    }
 

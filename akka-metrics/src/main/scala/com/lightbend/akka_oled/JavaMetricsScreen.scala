@@ -12,12 +12,12 @@ trait JavaMetricsScreen {
    def getJavaMetrics(): Array[Array[String]] = {
       val bean = ManagementFactory.getPlatformMXBean(classOf[OperatingSystemMXBean])
       val formatter = new DecimalFormat("#0.00")
-      val map: Map[String, String] = mutable.LinkedHashMap[String, String](
+      val map = mutable.LinkedHashMap[String, String](
          "Max mem:" -> FileUtils.byteCountToDisplaySize( ManagementFactory.getMemoryMXBean.getHeapMemoryUsage.getMax),
          "Curr mem:" -> FileUtils.byteCountToDisplaySize(ManagementFactory.getMemoryMXBean.getHeapMemoryUsage.getUsed),
          "CPU:" -> (formatter.format(bean.getSystemCpuLoad) + "%"),
          "Threads:" -> ManagementFactory.getThreadMXBean.getThreadCount.toString,
-         "Classes:" -> ManagementFactory.getClassLoadingMXBean.getLoadedClassCount.toString).toMap
+         "Classes:" -> ManagementFactory.getClassLoadingMXBean.getLoadedClassCount.toString)
       map.toArray.map(x => Array(x._1, x._2))
    }
 }

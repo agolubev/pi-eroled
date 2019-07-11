@@ -32,7 +32,6 @@ public class Test {
         {
             public void run()
             {
-                System.out.println("!!!!");
                 try {
                     oled.resetOLED();
                 } catch (InterruptedException e) {

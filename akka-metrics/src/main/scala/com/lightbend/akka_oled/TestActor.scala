@@ -18,7 +18,7 @@ class TestActor(notification:ActorRef) extends Actor {
       case Ping => state = System.currentTimeMillis().toString
          import context.dispatcher
          context.system.scheduler.scheduleOnce(1 second, self, Ping)
-         notification!MetricsActor.ACTOR_STATE(self.path.name,"\n{timestamp="+state+"}")
+         notification!MetricsActor.ACTOR_STATE(self.path.name,"\n{last update="+state+"}")
    }
 
 }

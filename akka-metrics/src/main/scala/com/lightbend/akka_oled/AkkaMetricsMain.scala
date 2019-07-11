@@ -19,8 +19,10 @@
   */
 package com.lightbend.akka_oled
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings, ShardRegion}
 import akka.management.scaladsl.AkkaManagement
+import com.lightbend.akka_oled.BankAccount.{EntityEnvelope, Get, Increment}
 import com.typesafe.config.ConfigFactory
 
 
@@ -32,6 +34,33 @@ object AkkaMetricsMain {
       val system = ActorSystem("akka-oled", baseConfig)
       val clusterStatusTracker = system.actorOf(MetricsActor.props(),MetricsActor.ACTOR_NAME)
       val testActor = system.actorOf(TestActor.props(clusterStatusTracker),"TestActor")
+
+
+      val extractEntityId: ShardRegion.ExtractEntityId = {
+         case EntityEnvelope(name, payload) => (name, payload)
+         case msg @ Get(name)               => (name, msg)
+      }
+
+      val numberOfShards = 100
+
+      val extractShardId: ShardRegion.ExtractShardId = {
+         case EntityEnvelope(id, _)       => (id.hashCode % numberOfShards).toString
+         case Get(id)                     => (id.hashCode % numberOfShards).toString
+         case ShardRegion.StartEntity(id) =>
+            // StartEntity is used by remembering entities feature
+            (id.hashCode % numberOfShards).toString
+      }
+
+      val counterRegion: ActorRef = ClusterSharding(system).start(
+         typeName = "Account",
+         entityProps = BankAccount.props(clusterStatusTracker),
+         settings = ClusterShardingSettings(system),
+         extractEntityId = extractEntityId,
+         extractShardId = extractShardId)
+
+      counterRegion ! EntityEnvelope("Michael", Increment)
+      counterRegion ! EntityEnvelope("John", Increment)
+
       testActor ! TestActor.Ping
       AkkaManagement(system).start
 

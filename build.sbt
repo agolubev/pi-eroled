@@ -33,7 +33,8 @@ lazy val `akka-metrics` = (project in file("akka-metrics"))
    .settings(libraryDependencies ++=
       Seq(
          "com.typesafe.akka" %% "akka-cluster" % "2.5.23",
-         "com.lightbend.akka.management" %% "akka-management" % "1.0.1"
+         "com.lightbend.akka.management" %% "akka-management" % "1.0.1",
+         "com.typesafe.akka" %% "akka-cluster-sharding" % "2.5.23"
       ),
       mainClass in assembly := Some("com.lightbend.akka_oled.AkkaMetricsMain"),
       assemblyJarName in assembly := "akka-metrics.jar",
