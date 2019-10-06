@@ -19,12 +19,14 @@
   */
 package com.lightbend.akka_oled
 
-import akka.actor.{Actor, ActorLogging, Props}
-import akka.cluster.Cluster
-import akka.cluster.ClusterEvent.{InitialStateAsEvents, LeaderChanged, MemberEvent, ReachabilityEvent}
+import akka.actor.{Actor, ActorLogging, Address, Props}
+import akka.cluster.{Cluster, Member}
+import akka.cluster.ClusterEvent.{InitialStateAsEvents, LeaderChanged, MemberEvent, MemberExited, MemberJoined, MemberLeft, MemberRemoved, MemberUp, MemberWeaklyUp, ReachabilityEvent, ReachableMember, UnreachableMember}
+import akka.cluster.MemberStatus.{Up, WeaklyUp}
 import com.lightbend.akka_oled.MetricsActor._
 import eroled.SmartOLED
 
+import scala.collection.mutable
 import scala.concurrent.duration._
 
 object MetricsActor {
@@ -54,9 +56,9 @@ object MetricsActor {
 
       protected case class Val(str: String) extends super.Val
 
+      val CLUSTER_STATE = Val("Cluster State")
       val JAVA_METRICS = Val("Java Metrics")
       val ACTOR_STATE = Val("Actor State")
-      val CLUSTER_STATE = Val("Cluster State")
       val NODE_STATE = Val("Cluster Node state")
       val CLUSTER_SHARDING = Val("Sharding state")
    }
@@ -67,8 +69,8 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
    var oled: SmartOLED = new SmartOLED()
    import context.dispatcher
 
-   var currentScreen: Screens.Value = Screens.JAVA_METRICS
-   var state = Map.empty[Screens.Value , Any]
+   var currentScreen: Screens.Value = Screens.CLUSTER_STATE
+   var state = mutable.Map.empty[Screens.Value , Any]
    var showingTitle = true
    override def preStart(): Unit = {
       //oled.init()
@@ -95,6 +97,22 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
    override def receive: Receive = idle
 
    def idle: Receive = akka.actor.Actor.emptyBehavior
+
+   def mapHostToName(ip:String):String={
+      ip match {
+         case "192.168.1.100" => "Node 0"
+         case "192.168.1.101" => "Node 1"
+         case "192.168.1.102" => "Node 2"
+         case _ => "Node X"
+      }
+   }
+
+   private def nodeStatus(member:Member,status:String): Unit ={
+      if (state.get(Screens.CLUSTER_STATE).isEmpty) state += Screens.CLUSTER_STATE ->
+         mutable.LinkedHashMap[String, String]("Node 0" -> "N/A", "Node 1" -> "N/A", "Node 2" -> "N/A")
+      state(Screens.CLUSTER_STATE).asInstanceOf[mutable.Map[String,String]] += mapHostToName(member.address.host.get) ->  status
+      if(currentScreen == Screens.CLUSTER_STATE) renderClusterState
+   }
 
    def running(): Receive = {
       case NEXT_SCREEN =>
@@ -128,70 +146,64 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
          state += (Screens.ACTOR_STATE -> List[(String,String)](("Actor:", path),("State:", actorState)))
 
       case PERSISTENT_ACTOR_STATE(name, actorState) =>
-         var m = state.get(Screens.CLUSTER_SHARDING).getOrElse(Map.empty[String, String]).asInstanceOf[Map[String,String]]
+         var m = state.get(Screens.CLUSTER_SHARDING).getOrElse(mutable.Map.empty[String, String]).asInstanceOf[mutable.Map[String,String]]
          m += ("Persistent Actor:"+name) -> ("State:"+actorState)
          state += (Screens.CLUSTER_SHARDING -> m)
-      //-> List[(String,String)](("Persistent Actor:", name),("State:", actorState)))
-
-   /*case Heartbeat if hearbeatLEDOn =>
-      setPixelColorAndShow(strip, logicalToPhysicalLEDMapping(HeartbeatLedNumber), Black)
-      context.become(running(hearbeatLEDOn = false))
-
-   case Heartbeat =>
-      setPixelColorAndShow(strip, logicalToPhysicalLEDMapping(HeartbeatLedNumber), heartbeartIndicatorColor)
-      context.become(running(hearbeatLEDOn = true))
-
+      
    case msg @ MemberUp(member) =>
-      setPixelColorAndShow(strip, mapHostToLED(member.address.host.get), nodeUpColor)
+      nodeStatus(member, "Up")
       log.debug(s"$msg")
 
    case msg @ MemberLeft(member) =>
-      setPixelColorAndShow(strip, mapHostToLED(member.address.host.get), nodeLeftColor)
+      nodeStatus(member, "Left")
       log.debug(s"$msg")
 
    case msg @ MemberExited(member) =>
-      setPixelColorAndShow(strip, mapHostToLED(member.address.host.get), nodeExitedColor)
+      nodeStatus(member, "Exited")
       log.debug(s"$msg")
 
    case msg @ MemberJoined(member) =>
-      setPixelColorAndShow(strip, mapHostToLED(member.address.host.get), nodeJoinedColor)
+      nodeStatus(member, "Joined")
       log.debug(s"$msg")
 
    case msg @ MemberRemoved(member, previousStatus) =>
-      setPixelColorAndShow(strip, mapHostToLED(member.address.host.get), nodeDownColor)
+      nodeStatus(member, "Removed")
       log.debug(s"$msg")
 
    case msg @ MemberWeaklyUp(member) =>
-      setPixelColorAndShow(strip, mapHostToLED(member.address.host.get), nodeWeaklyUpColor)
+      nodeStatus(member, "WeaklyUp")
       log.debug(s"$msg")
 
    case msg @ ReachableMember(member) if member.status == Up =>
-      setPixelColorAndShow(strip, mapHostToLED(member.address.host.get), nodeUpColor)
+      nodeStatus(member, "Reachable")
       log.debug(s"$msg")
 
    case msg @ ReachableMember(member) if member.status == WeaklyUp =>
-      setPixelColorAndShow(strip, mapHostToLED(member.address.host.get), nodeWeaklyUpColor)
+      nodeStatus(member, "Reachable")
       log.debug(s"$msg")
 
    case msg @ UnreachableMember(member) =>
-      setPixelColorAndShow(strip, mapHostToLED(member.address.host.get), nodeUnreachableColor)
-      log.debug(s"$msg")
-
-   case msg @ LeaderChanged(Some(leader)) if leader.host.getOrElse("") == thisHost =>
-      setPixelColorAndShow(strip, logicalToPhysicalLEDMapping(LeaderLedNumber), leaderIndicatorColor)
+      nodeStatus(member, "Unreachable")
       log.debug(s"$msg")
 
    case msg @ LeaderChanged(Some(leader)) =>
-      setPixelColorAndShow(strip, logicalToPhysicalLEDMapping(LeaderLedNumber), Black)
+      changeLeader(leader)
       log.debug(s"$msg")
 
    case msg @ LeaderChanged(None) =>
-      setPixelColorAndShow(strip, logicalToPhysicalLEDMapping(LeaderLedNumber), Black)
+      changeLeader(self.path.address)
       log.debug(s"$msg")
 
    case event =>
       log.debug(s"~~~> UNHANDLED CLUSTER DOMAIN EVENT: $event")
-*/
+
+   }
+
+   private def changeLeader(address:Address): Unit ={
+      if (state.get(Screens.CLUSTER_STATE).isEmpty) state += Screens.CLUSTER_STATE ->
+         mutable.LinkedHashMap[String, String]("Node 0" -> "N/A", "Node 1" -> "N/A", "Node 2" -> "N/A")
+      state(Screens.CLUSTER_STATE).asInstanceOf[mutable.Map[String,String]] += "Leader" -> mapHostToName(address.host.getOrElse("N/A"))
+      if(currentScreen == Screens.CLUSTER_STATE) renderClusterState
    }
 
    private def renderScreen() {
@@ -207,7 +219,10 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
                renderActorState()
                context.system.scheduler.scheduleOnce(UPDATE_DELAY, self, UPDATE_STATE)
             }
-         case Screens.CLUSTER_STATE => if (state.get(currentScreen).isEmpty) renderEmptyScreen
+         case Screens.CLUSTER_STATE => if (state.get(currentScreen).isEmpty) renderEmptyScreen else {
+            renderClusterState()
+            context.system.scheduler.scheduleOnce(UPDATE_DELAY, self, UPDATE_STATE)
+         }
          case Screens.NODE_STATE => if (state.get(currentScreen).isEmpty) renderEmptyScreen
          case Screens.CLUSTER_SHARDING =>
             if (state.get(currentScreen).isEmpty) renderEmptyScreen
@@ -228,9 +243,15 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
          oled.drawMultilineString(s.asInstanceOf[List[(String,String)]].map(a => a._1 + a._2).mkString("\n"))
       )
    }
+
+   private def renderClusterState(): Unit = {
+      state.get(Screens.CLUSTER_STATE).foreach(s =>
+         oled.drawMultilineString(s.asInstanceOf[mutable.Map[String,String]].map(a => a._1 +": "+ a._2+"            ").mkString("\n"))
+      )
+   }
    private def renderPersistentActorState(): Unit = {
       state.get(Screens.CLUSTER_SHARDING).foreach(s =>
-         oled.drawMultilineString(s.asInstanceOf[Map[String,String]].map(a => a._1 +"\n"+ a._2).mkString("\n"))
+         oled.drawMultilineString(s.asInstanceOf[mutable.Map[String,String]].map(a => a._1 +"\n"+ a._2).mkString("\n"))
       )
    }
 

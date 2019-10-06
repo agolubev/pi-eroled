@@ -2,7 +2,7 @@
 name := "pi-eroled"
 
 version := "0.1"
-
+import com.typesafe.sbt.packager.docker._
 resolvers ++= Seq(
    Resolver.sonatypeRepo("public"),
    "Confluent Maven Repo" at "http://packages.confluent.io/maven/"
@@ -30,16 +30,21 @@ lazy val `er-oled` = (project in file("er-oled"))
    )
 
 lazy val `akka-metrics` = (project in file("akka-metrics"))
+   .enablePlugins(JavaAppPackaging,AshScriptPlugin)
    .settings(libraryDependencies ++=
       Seq(
          "com.typesafe.akka" %% "akka-cluster" % "2.5.23",
          "com.lightbend.akka.management" %% "akka-management" % "1.0.1",
          "com.typesafe.akka" %% "akka-cluster-sharding" % "2.5.23"
       ),
-      mainClass in assembly := Some("com.lightbend.akka_oled.AkkaMetricsMain"),
-      assemblyJarName in assembly := "akka-metrics.jar",
+      assemblyJarName in assembly := "oled-akka.jar",
       assemblyExcludedJars in assembly := {
          val cp = (fullClasspath in assembly).value
          cp filter {_.data.getName().indexOf("javadoc.jar") > 0}
-      }
+      },
+      dockerCommands += ExecCmd("RUN","apt-get", "install", "wiringpi"),
+      mainClass in assembly := Some("com.lightbend.akka_oled.AkkaMetricsMain"),
+      packageName in Docker := "oled-akka",
+      dockerUpdateLatest := true,
+      dockerBaseImage := "hypriot/rpi-java",
    ).dependsOn(`er-oled`)

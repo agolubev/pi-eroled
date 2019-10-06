@@ -13,9 +13,9 @@ trait ButtonPushHandlers {
    private[this] def diff(last: Option[Long]): Long = System.currentTimeMillis() - last.getOrElse(0L)
 
    def initButtonPush(actor: ActorRef): Unit = {
-      val downButton: GpioPinDigitalInput = gpio.provisionDigitalInputPin(RaspiPin.GPIO_12, PinPullResistance.PULL_UP)
+      val upButton: GpioPinDigitalInput = gpio.provisionDigitalInputPin(RaspiPin.GPIO_16, PinPullResistance.PULL_UP)
 
-      downButton.addListener(new GpioPinListenerDigital() {
+      upButton.addListener(new GpioPinListenerDigital() {
          var lastPush: Option[Long] = None
 
          override def handleGpioPinDigitalStateChangeEvent(event: GpioPinDigitalStateChangeEvent): Unit = {
@@ -26,7 +26,7 @@ trait ButtonPushHandlers {
          }
       })
 
-      val upButton: GpioPinDigitalInput = gpio.provisionDigitalInputPin(RaspiPin.GPIO_16, PinPullResistance.PULL_UP)
+     /* val upButton: GpioPinDigitalInput = gpio.provisionDigitalInputPin(RaspiPin.GPIO_16, PinPullResistance.PULL_UP)
 
       upButton.addListener(new GpioPinListenerDigital() {
          var lastPush: Option[Long] = None
@@ -37,6 +37,6 @@ trait ButtonPushHandlers {
                actor ! PREVIOUS_SCREEN
             }
          }
-      })
+      })*/
    }
 }
