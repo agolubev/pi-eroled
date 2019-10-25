@@ -7,6 +7,7 @@ import com.pi4j.io.spi.SpiMode;
 
 import java.io.IOException;
 
+// ER-OLEDM032-1 is a 256x64 each pixel is a 4-bit gray-scale value.
 public class OLED {
     protected SpiDevice spi = null;
     protected GpioPinDigitalOutput dc = null;
