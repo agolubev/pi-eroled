@@ -24,7 +24,7 @@ import akka.cluster.{Cluster, Member}
 import akka.cluster.ClusterEvent.{InitialStateAsEvents, LeaderChanged, MemberEvent, MemberExited, MemberJoined, MemberLeft, MemberRemoved, MemberUp, MemberWeaklyUp, ReachabilityEvent, ReachableMember, UnreachableMember}
 import akka.cluster.MemberStatus.{Up, WeaklyUp}
 import com.lightbend.akka_oled.MetricsActor._
-import eroled.SmartOLED
+import eroled.{BasicOLED, OLEDWindow, SmartOLED}
 
 import scala.collection.mutable
 import scala.concurrent.duration._
@@ -34,6 +34,7 @@ object MetricsActor {
    val UPDATE_DELAY = 1 second
 
    case object NEXT_SCREEN
+   case object RESET_SCREEN
 
    case object PREVIOUS_SCREEN
    case class SWITCH_FROM_TITLE_TO_SCREEN(screen:Screens.Value)
@@ -65,8 +66,10 @@ object MetricsActor {
 
 }
 
-class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with JavaMetricsScreen {
+class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with JavaMetricsScreen with Logo {
    var oled: SmartOLED = new SmartOLED()
+   val window: OLEDWindow = new OLEDWindow(oled,0,0,256,64)
+
    import context.dispatcher
 
    var currentScreen: Screens.Value = Screens.CLUSTER_STATE
@@ -74,7 +77,7 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
    var showingTitle = true
    override def preStart(): Unit = {
       //oled.init()
-      log.info("OLED initialized!")
+      log.info("BasicOLED initialized!")
       Cluster(context.system)
          .subscribe(self,
             InitialStateAsEvents,
@@ -84,8 +87,7 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
          )
       //imers.startPeriodicTimer("heartbeat-timer", Heartbeat, heartbeatIndicatorInterval)
       context.become(running())
-      renderTitle()
-
+      renderLogo()
       initButtonPush(self)
    }
 
@@ -111,10 +113,21 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
       if (state.get(Screens.CLUSTER_STATE).isEmpty) state += Screens.CLUSTER_STATE ->
          mutable.LinkedHashMap[String, String]("Node 0" -> "N/A", "Node 1" -> "N/A", "Node 2" -> "N/A")
       state(Screens.CLUSTER_STATE).asInstanceOf[mutable.Map[String,String]] += mapHostToName(member.address.host.get) ->  status
-      if(currentScreen == Screens.CLUSTER_STATE) renderClusterState
+
+      if(currentScreen == Screens.CLUSTER_STATE){
+         if(showingTitle ) {
+            oled.clearRam()
+            showingTitle = false
+         }
+         renderClusterState
+      }
    }
 
    def running(): Receive = {
+      case RESET_SCREEN =>
+         currentScreen = Screens(0)
+         log.info("Next screen")
+         renderTitle()
       case NEXT_SCREEN =>
          currentScreen = if(currentScreen.id == Screens.maxId - 1) Screens(0) else Screens(currentScreen.id + 1)
          log.info("Next screen")
@@ -129,7 +142,8 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
             log.info("Render screen")
             oled.clearRam()
             renderScreen
-         }
+         }else oled.clearRam()
+
       case UPDATE_STATISTICS  if currentScreen == Screens.JAVA_METRICS =>
                oled.drawKeyValues(getJavaMetrics)
                context.system.scheduler.scheduleOnce(UPDATE_DELAY, self, UPDATE_STATISTICS)
@@ -219,7 +233,7 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
                renderActorState()
                context.system.scheduler.scheduleOnce(UPDATE_DELAY, self, UPDATE_STATE)
             }
-         case Screens.CLUSTER_STATE => if (state.get(currentScreen).isEmpty) renderEmptyScreen else {
+         case Screens.CLUSTER_STATE => if (state.get(currentScreen).isEmpty) renderEmptyScreen("Initializing cluster") else {
             renderClusterState()
             context.system.scheduler.scheduleOnce(UPDATE_DELAY, self, UPDATE_STATE)
          }
@@ -231,6 +245,11 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
                context.system.scheduler.scheduleOnce(UPDATE_DELAY, self, UPDATE_STATE)
             }
       }
+   }
+
+   private def renderEmptyScreen(data:String) {
+      oled.clearRam()
+      oled.drawString(0, 21, data)
    }
 
    private def renderEmptyScreen() {
@@ -255,6 +274,14 @@ class MetricsActor extends Actor with ActorLogging with ButtonPushHandlers with 
       )
    }
 
+
+   private def renderLogo() {
+      oled.clearRam()
+      window.drawBwImage(30,2,200,60,0xFF.toByte,logoBytes,0)
+      window.drawScreenBuffer()
+      showingTitle = true
+      context.system.scheduler.scheduleOnce(2 second, self, SWITCH_FROM_TITLE_TO_SCREEN(currentScreen))
+   }
 
    private def renderTitle() {
       oled.clearRam()

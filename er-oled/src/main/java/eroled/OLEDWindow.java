@@ -3,17 +3,17 @@ package eroled;
 import java.io.IOException;
 import java.util.Arrays;
 
-import static java.lang.Math.abs;
+import static java.lang.Math.*;
 
 public class OLEDWindow {
-    OLED oled;
+    BasicOLED oled;
     int x;
     int y;
     int width;
     int height;
-    int[] buffer;
-
-    public void OLEDWindow(OLED oled,
+    byte[] buffer;
+    byte _0F= 0x0F;
+    public OLEDWindow(BasicOLED oled,
             int x,
             int y,
             int width,
@@ -23,41 +23,44 @@ public class OLEDWindow {
         this.y=y;
         this.width=width;
         this.height=height;
-        this.buffer=new int[(width/2)*height];
+        this.buffer=new byte[(width/2)*height];
 
     }
     public void drawScreenBuffer() throws IOException {
         oled.setDataWindow(x,y,width,height);
         oled.writeInstruction(0x5c);
-        oled.writeDataBytes(Arrays.copyOfRange(buffer,0,4096));
-        oled.writeDataBytes(Arrays.copyOfRange(buffer,4096,buffer.length));
+        for ( int i=0;i<buffer.length;i+=2048)
+        {
+            oled.writeDataBytes(Arrays.copyOfRange(buffer, i, min(i+2048,buffer.length)));
+        }
     }
-    public void setPixel(int x, int y, int color){
-        color = color & 0x0F;
+
+    public void setPixel(int x, int y, byte color){
+        color &= 0x0F;
         int ofs = y * width/2;
         ofs = ofs + x/2;// 2 pixels per byte across row
-        int v;
-        if (x%2 ==0) {
-            v = buffer[ofs] & 0x0F;
-            v = v | (color << 4);
+        byte v;
+        if (x%2 == 0) {
+            v = (byte)(buffer[ofs] & 0x0F);
+            v |= (color << 4);
         } else {
-            v = buffer[ofs] & 0xF0;
-            v = v | color;
+            v = (byte)(buffer[ofs] & 0xF0);
+            v |= color;
         }
         buffer[ofs] = v;
     }
 
-    public void draw_bw_image(int x,int y,int width,int height,int color,int[] data,int offs){
+    public void drawBwImage(int x,int y,int width,int height,byte color,byte[] data,int offs){
         int pos = offs;
         for(int yy = 0; yy<height; yy++){
             int ox = x;
             for(int xx = 0; xx<width/8; xx++){
-             int  mask = 128;
+             int  mask = 0b10000000;
                 for(int pp = 0; pp<8; pp++){
                     if((data[pos] & mask)>0)
                         setPixel(x,y,color);
                     else
-                        setPixel(x,y,0);
+                        setPixel(x,y,(byte)0);
                     mask = mask>>1;
                     x=x + 1;
                 }
@@ -68,8 +71,9 @@ public class OLEDWindow {
         }
     }
 
-    public void drawBigBwImage(int x, int y, int width, int height, int color, int[] data, int offs){
+    public void drawBigBwImage(int x, int y, int width, int height, byte color, byte[] data, int offs){
         int pos = offs;
+        byte black = 0;
         for(int yy = 0; yy<height; yy++) {
             int ox = x;
             for (int xx = 0; xx < width / 8; xx++) {
@@ -81,10 +85,10 @@ public class OLEDWindow {
                         setPixel(x, y + 1, color);
                         setPixel(x + 1, y + 1, color);
                     } else{
-                        setPixel(x, y, 0);
-                        setPixel(x + 1, y, 0);
-                        setPixel(x, y + 1, 0);
-                        setPixel(x + 1, y + 1, 0);
+                        setPixel(x, y, black);
+                        setPixel(x + 1, y, black);
+                        setPixel(x, y + 1, black);
+                        setPixel(x + 1, y + 1, black);
                     }
                     mask = mask>>1;
                     x=x + 2;
@@ -105,7 +109,7 @@ public class OLEDWindow {
 
     public void drawLine(int startx, int starty,
                          int endx, int endy,
-                         int color){
+                         byte color){
 
         int dx = endx - startx;
         int dy = endy - starty;
@@ -158,7 +162,7 @@ public class OLEDWindow {
         }
     }
 
-    public void drawRectangle(int x, int y, int width, int height, int color){
+    public void drawRectangle(int x, int y, int width, int height, byte color){
         for(int xx=0;xx<width;xx++){
             setPixel(x+xx,y,color);
             setPixel(x+xx,y+height-1, color);
@@ -169,14 +173,14 @@ public class OLEDWindow {
         }
     }
 
-    public void drawVLine(int x, int y, int h, int color){
+    public void drawVLine(int x, int y, int h, byte color){
         drawLine(x, y, x, y+h-1, color);
     }
-    public void drawHLine(int x, int y, int w, int color){
+    public void drawHLine(int x, int y, int w, byte color){
         drawLine(x, y, x+w-1, y, color);
     }
 
-    public void DrawFrame(int x,int y,int w, int h,int color){
+    public void DrawFrame(int x,int y,int w, int h,byte color){
         drawHLine(x, y, w, color);
         drawHLine(x, y+h-1, w, color);
         drawVLine(x, y, h, color);

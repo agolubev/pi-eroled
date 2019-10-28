@@ -2,10 +2,11 @@ package eroled;
 
 
 import java.io.IOException;
+import java.util.Arrays;
 
 import static jdk.nashorn.internal.objects.NativeMath.min;
 
-public class SmartOLED extends OLED {
+public class SmartOLED extends BasicOLED {
     public SmartOLED() throws IOException, InterruptedException {
         super();
     }

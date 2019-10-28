@@ -27,7 +27,7 @@ public class Test {
 
     }
 
-    public static void onShutdown(final OLED oled){
+    public static void onShutdown(final BasicOLED oled){
         Runtime.getRuntime().addShutdownHook(new Thread()
         {
             public void run()

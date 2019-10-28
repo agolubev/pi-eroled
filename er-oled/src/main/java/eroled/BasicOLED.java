@@ -6,14 +6,16 @@ import com.pi4j.io.spi.SpiFactory;
 import com.pi4j.io.spi.SpiMode;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
 
 // ER-OLEDM032-1 is a 256x64 each pixel is a 4-bit gray-scale value.
-public class OLED {
+public class BasicOLED {
     protected SpiDevice spi = null;
     protected GpioPinDigitalOutput dc = null;
     protected GpioPinDigitalOutput reset = null;
 
-    public OLED() throws IOException, InterruptedException {
+    public BasicOLED() throws IOException, InterruptedException {
 
         GpioFactory.setDefaultProvider(new RaspiGpioProvider(RaspiPinNumberingScheme.BROADCOM_PIN_NUMBERING));
         final GpioController gpio = GpioFactory.getInstance();
@@ -51,7 +53,6 @@ public class OLED {
         writeData(0x80);
         writeInstruction(0xC7); // master contrast current control
         writeData(0x0f);
-        ;
 
         writeInstruction(0xB1); // SET PHASE LENGTH
         writeData(0xE2);
@@ -89,12 +90,10 @@ public class OLED {
         spi.write((byte) dataBytes);
     }
 
-    public void writeDataBytes(int[] dataBytes) throws IOException {
+    public void writeDataBytes(byte[] dataBytes) throws IOException {
         if (dataBytes == null) return;
         dc.high();
-        byte[] b = new byte[dataBytes.length];
-        System.arraycopy(dataBytes, 0, b, 0, dataBytes.length);
-        spi.write(b);
+        spi.write(dataBytes);
     }
 
 
