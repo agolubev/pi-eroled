@@ -1,6 +1,10 @@
 package com.lightbend.akka_oled
 
-object AkkaMetricsMain {
+import akka.actor.ActorSystem
+import akka.management.scaladsl.AkkaManagement
+import com.typesafe.config.ConfigFactory
+
+object Main {
 
    def main(args: Array[String]): Unit = {
       val baseConfig = ConfigFactory.load()

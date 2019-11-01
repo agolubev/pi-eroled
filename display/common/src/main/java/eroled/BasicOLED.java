@@ -6,8 +6,6 @@ import com.pi4j.io.spi.SpiFactory;
 import com.pi4j.io.spi.SpiMode;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.IntBuffer;
 
 // ER-OLEDM032-1 is a 256x64 each pixel is a 4-bit gray-scale value.
 public class BasicOLED {

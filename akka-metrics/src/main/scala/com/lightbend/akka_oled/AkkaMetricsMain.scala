@@ -63,6 +63,5 @@ object AkkaMetricsMain {
 
       testActor ! TestActor.Ping
       AkkaManagement(system).start
-
    }
 }

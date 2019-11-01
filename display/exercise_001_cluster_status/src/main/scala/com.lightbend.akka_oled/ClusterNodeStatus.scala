@@ -19,29 +19,31 @@
   */
 package com.lightbend.akka_oled
 
+import akka.actor.{Actor, ActorLogging, Address, Props}
+import akka.cluster.ClusterEvent._
+import akka.cluster.MemberStatus.{Up, WeaklyUp}
+import akka.cluster.{Cluster, Member}
+import akka_oled.Logo
+import eroled.{OLEDWindow, SmartOLED}
+
 import scala.collection.mutable
 import scala.concurrent.duration._
+import scala.language.postfixOps
 
 object ClusterNodeStatus {
 
-   val UPDATE_DELAY = 1 second
-
-
-   case class SWITCH_FROM_LOGO_TO_SCREEN(screen: Screens.Value)
-
    val ACTOR_NAME = "cluster-node-status"
 
-   def props(): Props = {
-      Props(new MetricsActor())
-   }
+   def props(): Props =
+      Props(new ClusterNodeStatus())
 
 }
 
 class ClusterNodeStatus extends Actor with ActorLogging with Logo {
+
    var oled: SmartOLED = new SmartOLED()
    val window: OLEDWindow = new OLEDWindow(oled, 0, 0, 256, 64)
 
-   var currentScreen: Screens.Value = Screens.CLUSTER_STATE
    var state: Option[mutable.LinkedHashMap[String, String]] = None
    var showingLogo = true
 
@@ -95,15 +97,13 @@ class ClusterNodeStatus extends Actor with ActorLogging with Logo {
       }
 
       if (state.isDefined)
-         state.foreach(s =>
-            oled.drawMultilineString(s.map(a => a._1 + ": " + a._2).mkString("\n"))
-         )
+         oled.drawMultilineString(state.get.map[String] { case (key, value) => key + ": " + value + "        " }.mkString("\n"))
       else
          oled.drawString(0, 21, "Joining cluster")
    }
 
    def running(): Receive = {
-      case SWITCH_FROM_TITLE_TO_SCREEN(screen) =>
+      case SWITCH_FROM_LOGO_TO_SCREEN =>
          renderState
 
       case msg@MemberUp(member) =>
@@ -122,7 +122,7 @@ class ClusterNodeStatus extends Actor with ActorLogging with Logo {
          nodeStatus(member, "Joined")
          log.debug(s"$msg")
 
-      case msg@MemberRemoved(member, previousStatus) =>
+      case msg@MemberRemoved(member, _) =>
          nodeStatus(member, "Removed")
          log.debug(s"$msg")
 
@@ -151,7 +151,7 @@ class ClusterNodeStatus extends Actor with ActorLogging with Logo {
          log.debug(s"$msg")
 
       case event =>
-         log.debug(s"~~~> UNHANDLED CLUSTER DOMAIN EVENT: $event")
+         log.debug(s"!Unknown event! $event")
 
    }
 
@@ -161,18 +161,23 @@ class ClusterNodeStatus extends Actor with ActorLogging with Logo {
          state = Some(
             mutable.LinkedHashMap[String, String]("Node 0" -> "N/A", "Node 1" -> "N/A", "Node 2" -> "N/A"))
       }
-      state(Screens.CLUSTER_STATE).asInstanceOf[mutable.Map[String, String]] += "Leader" -> mapHostToName(address.host.getOrElse("N/A"))
+      state.get += "Leader" -> mapHostToName(address.host.getOrElse("N/A"))
 
       renderState
    }
 
+   override def postStop(): Unit = {
+      oled.resetOLED()
+      Cluster(context.system).unsubscribe(self)
+   }
 
    private def renderLogo() {
       oled.clearRam()
       window.drawBwImage(30, 2, 200, 60, 0xFF.toByte, logoBytes, 0)
       window.drawScreenBuffer()
       showingLogo = true
-      context.system.scheduler.scheduleOnce(2 second, self, SWITCH_FROM_TITLE_TO_SCREEN(currentScreen))
+      import context.dispatcher
+      context.system.scheduler.scheduleOnce(2 second, self, SWITCH_FROM_LOGO_TO_SCREEN)
    }
 
 }

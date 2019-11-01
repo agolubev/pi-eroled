@@ -22,13 +22,13 @@ class SmartOLEDTest extends WordSpec with MockitoSugar {
          val a: SmartOLED = mock[SmartOLED]
          when(a.drawSpreadsheetInColumns(any(classOf[Array[Array[String]]]))).thenCallRealMethod()
          PowerMockito.whenNew(classOf[SmartOLED]).withNoArguments().thenReturn(a)
-         a.drawSpreadsheetInColumns(Array(Array("123 ", "123"), Array("234", "234"), Array("234", "234")
-            , Array("234", "234"),
+         a.drawSpreadsheetInColumns(Array(Array("123 ", "123"),
+            Array("234", "234"), Array("234", "234"), Array("234", "234"),
             Array("234", "234"), Array("234  ", "234")))
 
          verify(a, times(1))
-            .drawMultilineString("123          123 | 234          234\n234          234 | 234          234\n"+
-                                   "234          234\n234          234\n")
+            .drawMultilineString("123          123 | 234          234\n234          234 | 234          234\n" +
+               "234          234\n234          234\n")
       }
 
 

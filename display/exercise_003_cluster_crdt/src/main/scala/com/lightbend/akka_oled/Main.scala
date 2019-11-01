@@ -10,7 +10,7 @@ object Main {
       val baseConfig = ConfigFactory.load()
 
       val system = ActorSystem("akka-oled", baseConfig)
-      val clusterStatusTracker = system.actorOf(ClusterNodeStatus.props(),ClusterNodeStatus.ACTOR_NAME)
+      val clusterStatusTracker = system.actorOf(ClusterCRDTStatus.props(),ClusterCRDTStatus.ACTOR_NAME)
 
       AkkaManagement(system).start
 
