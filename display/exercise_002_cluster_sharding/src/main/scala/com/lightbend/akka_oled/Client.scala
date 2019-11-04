@@ -43,6 +43,7 @@ class Client(ref: ActorRef) extends PersistentActor {
    def updateState(event: TransactionAdded): Unit = {
       name = name.orElse(Some(event.name))
       total += event.amount
+      ref ! Notification(persistenceId, total)
    }
 
 
@@ -56,7 +57,6 @@ class Client(ref: ActorRef) extends PersistentActor {
    override def receiveCommand: Receive = {
       case PostTransaction(name, amount) =>
          persist(TransactionAdded(name, amount))(updateState)
-         ref ! Notification(name, total)
       case Get(name) =>
          sender() ! total
          ref ! Notification(name, total)

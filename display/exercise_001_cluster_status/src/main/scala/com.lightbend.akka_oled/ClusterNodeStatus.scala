@@ -60,11 +60,6 @@ class ClusterNodeStatus extends Actor with ActorLogging with Logo {
       renderLogo()
    }
 
-   override def postStop(): Unit = {
-      oled.resetOLED()
-      Cluster(context.system).unsubscribe(self)
-   }
-
    override def receive: Receive = idle
 
    def idle: Receive = akka.actor.Actor.emptyBehavior
