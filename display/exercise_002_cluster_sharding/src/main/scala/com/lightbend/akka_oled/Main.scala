@@ -21,23 +21,18 @@ package com.lightbend.akka_oled
 
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.Http
-import akka.management.scaladsl.AkkaManagement
-import akka.stream.ActorMaterializer
-import com.typesafe.config.ConfigFactory
-import akka.http.scaladsl.coding.Deflate
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import akka.http.scaladsl.marshalling.ToResponseMarshaller
-import akka.http.scaladsl.model.StatusCodes.MovedPermanently
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.unmarshalling.FromRequestUnmarshaller
+import akka.management.scaladsl.AkkaManagement
+import akka.pattern.ask
+import akka.stream.ActorMaterializer
+import akka.util.Timeout
 import com.lightbend.akka_oled.Client.{Get, PostTransaction}
+import com.typesafe.config.ConfigFactory
+import spray.json._
 
 import scala.concurrent.Future
-import akka.pattern.ask
-import akka.util.Timeout
-
 import scala.concurrent.duration._
-import spray.json._
 
 object Main extends SprayJsonSupport with DefaultJsonProtocol{
    case class AddTransaction(amount:Int)

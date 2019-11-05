@@ -19,17 +19,58 @@
   */
 package com.lightbend.akka_oled
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorRef, ActorSystem}
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import akka.http.scaladsl.server.Directives.{as, complete, concat, entity, get, onSuccess, pathPrefix, post}
 import akka.management.scaladsl.AkkaManagement
+import akka.stream.ActorMaterializer
+import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
 
-object Main {
+import scala.concurrent.Future
+import akka.pattern.ask
+import akka.util.Timeout
+import akka.http.scaladsl.server.Directives._
+import com.lightbend.akka_oled.ClusterCRDTStatus.{Get, UpdateStatus}
+import spray.json.DefaultJsonProtocol
 
+import scala.concurrent.duration._
+import scala.concurrent.Future
+
+object Main extends SprayJsonSupport with DefaultJsonProtocol{
+   case class NodeStatus(status:String)
    def main(args: Array[String]): Unit = {
       val baseConfig = ConfigFactory.load()
+      implicit val transactionFormat = jsonFormat1(NodeStatus)
+      implicit val system = ActorSystem("akka-oled", baseConfig)
+      val clusterStatusTracker: ActorRef = system.actorOf(ClusterCRDTStatus.props(),ClusterCRDTStatus.ACTOR_NAME)
 
-      val system = ActorSystem("akka-oled", baseConfig)
-      val clusterStatusTracker = system.actorOf(ClusterCRDTStatus.props(), ClusterCRDTStatus.ACTOR_NAME)
+      implicit val timeout: Timeout = 3.seconds
+      implicit val materializer = ActorMaterializer()
+      implicit val executionContext = system.dispatcher
+
+      val route =
+         pathPrefix("status" / """[0-9a-zA-Z]+""".r) { node =>
+            concat(
+               get {
+                  val total:Future[Option[String]] = clusterStatusTracker.ask(Get(node)).mapTo[Option[String]]
+                  onSuccess(total) {
+                     a: Option[String] => complete(a.getOrElse("N/A") + "\n")
+                  }
+               },
+               post {
+                  entity(as[NodeStatus]) { status =>
+                     clusterStatusTracker ! UpdateStatus(node, status.status)
+                     complete("Ok\n")
+                  }
+               }
+            )
+         }
+
+
+      val serverSource = Http().bindAndHandle(route,
+         interface = baseConfig.getString("akka.http_host"), port = 8080)
 
       AkkaManagement(system).start
 

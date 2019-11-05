@@ -31,8 +31,8 @@ lazy val excerciseConfig: Project => Project = (proj: Project) => {
             "com.typesafe.akka" %% "akka-cluster-sharding" % akkaVer,
             "com.github.dnvriend" %% "akka-persistence-jdbc" % "3.5.2",
             "mysql" % "mysql-connector-java" % "8.0.18",
-            "com.lightbend.akka.management" %% "akka-management-cluster-http" % "1.0.3"
-
+            "com.lightbend.akka.management" %% "akka-management-cluster-http" % "1.0.3",
+            "com.typesafe.akka" %% "akka-distributed-data" % "2.5.26"
          ),
          mainClass in assembly := Some("com.lightbend.akka_oled.Main"),
          assemblyMergeStrategy in assembly := {
